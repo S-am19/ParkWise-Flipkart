@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# FastAPI
+backend/cache/
+
+# Node
+node_modules/
+
+# Next
+.next/
+out/
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dataset
+*.csv
+dataset/
