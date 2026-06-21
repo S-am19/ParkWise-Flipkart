@@ -15,7 +15,7 @@ This phase intentionally contains no frontend, React, Next.js, Tailwind, Docker,
 - Enforcement capacity planning.
 - Enforcement impact simulation.
 
-All analytics are deterministic and derived entirely from the local CSV dataset. No AI model is used for calculations.
+All analytics are deterministic and derived entirely from the parking CSV dataset. No AI model is used for calculations.
 
 ## Folder Structure
 
@@ -41,13 +41,27 @@ backend/
 
 ## Dataset
 
-The loader automatically searches for a CSV in:
+The loader automatically searches for a local CSV in:
 
 1. `backend/dataset/`
 2. `backend/`
 3. the project root
 
-The included project dataset named similar to `jan to may police violation_anonymized791b166 (1).csv` is detected automatically.
+If a local CSV is found, it is used exactly as-is. If no CSV is found, the backend creates
+`backend/dataset/`, downloads the dataset from Hugging Face, saves it locally, and continues
+normal startup.
+
+Dataset source:
+
+```text
+https://huggingface.co/datasets/S-am19/parkwise-bengaluru-parking-data/resolve/main/jan%20to%20may%20police%20violation_anonymized791b166%20(1).csv
+```
+
+The downloaded file is cached as:
+
+```text
+backend/dataset/jan to may police violation_anonymized791b166 (1).csv
+```
 
 Expected columns include:
 
@@ -73,11 +87,37 @@ Open the generated OpenAPI docs:
 http://127.0.0.1:8000/docs
 ```
 
+## Render Deployment
+
+The CSV dataset is intentionally not stored in Git because it exceeds GitHub's file size limit.
+On Render, deploy only the repository code; the backend will download the dataset during first
+startup if no local CSV exists.
+
+Recommended Render settings:
+
+```text
+Root Directory: backend
+Build Command: pip install -r requirements.txt
+Start Command: uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+Expected first startup logs when the dataset is absent:
+
+```text
+Dataset not found locally.
+Downloading dataset from Hugging Face...
+Dataset downloaded successfully.
+```
+
+Subsequent startups use the cached local file at `backend/dataset/` as long as Render preserves
+the service filesystem. If the service is rebuilt on a fresh filesystem, the backend downloads
+the dataset again automatically.
+
 ## Startup Pipeline
 
 At server startup, the app:
 
-1. Finds and loads the CSV.
+1. Finds a local CSV or downloads and caches the CSV when missing.
 2. Cleans missing values and converts timestamps.
 3. Parses violation lists.
 4. Computes hotspot metrics.

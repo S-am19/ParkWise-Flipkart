@@ -1,12 +1,26 @@
 import ast
 import hashlib
 import json
+import logging
 import pickle
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
+
+logger = logging.getLogger("uvicorn.error")
+
+DATASET_URL = (
+    "https://huggingface.co/datasets/S-am19/parkwise-bengaluru-parking-data/"
+    "resolve/main/jan%20to%20may%20police%20violation_anonymized791b166%20(1).csv"
+)
+DATASET_FILENAME = "jan to may police violation_anonymized791b166 (1).csv"
+DOWNLOAD_RETRIES = 3
+DOWNLOAD_TIMEOUT_SECONDS = 60
 
 EXPECTED_COLUMNS = {
     "latitude",
@@ -36,7 +50,7 @@ def cache_dir() -> Path:
     return path
 
 
-def find_dataset() -> Path:
+def find_local_dataset() -> Path | None:
     search_dirs = [
         backend_root() / "dataset",
         backend_root(),
@@ -49,10 +63,7 @@ def find_dataset() -> Path:
             candidates.extend(directory.glob("*.CSV"))
 
     if not candidates:
-        raise FileNotFoundError(
-            "No CSV dataset found. Place the police violation CSV in backend/dataset/ "
-            "or the project root."
-        )
+        return None
 
     preferred = [
         path
@@ -60,6 +71,62 @@ def find_dataset() -> Path:
         if "police" in path.name.lower() and "violation" in path.name.lower()
     ]
     return sorted(preferred or candidates, key=lambda p: p.stat().st_size, reverse=True)[0]
+
+
+def download_dataset() -> Path:
+    dataset_directory = backend_root() / "dataset"
+    dataset_directory.mkdir(parents=True, exist_ok=True)
+    destination = dataset_directory / DATASET_FILENAME
+    temporary_destination = destination.with_suffix(destination.suffix + ".part")
+
+    logger.info("Downloading dataset from Hugging Face...")
+    last_error: Exception | None = None
+    for attempt in range(1, DOWNLOAD_RETRIES + 1):
+        try:
+            request = urllib.request.Request(
+                DATASET_URL,
+                headers={"User-Agent": "ParkWise-FastAPI/1.0"},
+            )
+            with urllib.request.urlopen(
+                request,
+                timeout=DOWNLOAD_TIMEOUT_SECONDS,
+            ) as response, temporary_destination.open("wb") as file:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    file.write(chunk)
+
+            if temporary_destination.stat().st_size == 0:
+                raise RuntimeError("Downloaded dataset is empty.")
+
+            temporary_destination.replace(destination)
+            logger.info("Dataset downloaded successfully.")
+            return destination
+        except (OSError, RuntimeError, urllib.error.URLError) as exc:
+            last_error = exc
+            temporary_destination.unlink(missing_ok=True)
+            if attempt < DOWNLOAD_RETRIES:
+                logger.warning(
+                    "Dataset download failed on attempt %s/%s: %s. Retrying...",
+                    attempt,
+                    DOWNLOAD_RETRIES,
+                    exc,
+                )
+                time.sleep(2 ** (attempt - 1))
+
+    raise RuntimeError(
+        f"Unable to download dataset from Hugging Face after {DOWNLOAD_RETRIES} attempts."
+    ) from last_error
+
+
+def find_dataset() -> Path:
+    dataset_path = find_local_dataset()
+    if dataset_path is not None:
+        return dataset_path
+
+    logger.info("Dataset not found locally.")
+    return download_dataset()
 
 
 def dataset_fingerprint(path: Path) -> str:
