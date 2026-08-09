@@ -288,8 +288,6 @@ screenshots/planner.png
 ## 👩‍💻 Author
 
 **Samridhi Dhamija**  
-MIT Manipal – Computer Science (AI & ML)
 **Manik Chaudhary**
-MIT Manipal - Computer Science
 
 Built using FastAPI, Next.js, React Leaflet, and geospatial analytics to support data-driven parking enforcement decisions.
