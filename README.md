@@ -1,4 +1,4 @@
-# 🚦 ParkWise – AI-Powered Parking Intelligence System
+# 🚦 ParkWise – Parking Intelligence System
 
 > Bengaluru Traffic Command Dashboard for intelligent parking enforcement, hotspot detection, and data-driven deployment planning.
 
